@@ -106,6 +106,8 @@ plot([t_on t_on],[-1 1],'-k')
 plot([t_off t_off],[-1 1],'-k')
 ylim([-1 1])
 title('Output')
+set(gca,'xtick',[],'ytick',[])
+ylabel('Event Rate')
 
 %% training
 for l = 1:n_train_its
@@ -162,6 +164,9 @@ plot(R_all(sp,:),'b')
 plot(r_test(sp,:),'r')
 plot([t_on t_on],[-1 1],'-k')
 plot([t_off t_off],[-1 1],'-k')
+title(['Cell ' num2str(sp)])
+set(gca,'xtick',[],'ytick',[])
+ylabel('Event Rate')
 end
 
 subplot(7,2,14)
@@ -179,3 +184,6 @@ plot(Wo'*r_test,'r')
 plot([t_on t_on],[-1 1],'-k')
 plot([t_off t_off],[-1 1],'-k')
 ylim([-1 1])
+title('Output')
+set(gca,'xtick',[],'ytick',[])
+ylabel('Event Rate')

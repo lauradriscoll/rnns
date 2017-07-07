@@ -1,0 +1,188 @@
+%% init
+param.tau = 10; %ms
+param.pc = .1;
+param.I0 = .001;
+param.n_all = 100;
+param.n_its = 1000;
+param.n_in = 1;
+param.n_train_its = 30;
+param.n_out = 1;
+x = randn(param.n_all,1);
+dx = randn(param.n_all,1);
+r = tanh(x);
+e.i = nan(n_train_its,param.n_all,n_its);
+e.o = nan(n_train_its,n_out,n_its);
+W.r = randn(param.n_all)/sqrt(pc*param.n_all);
+W.i = randn(param.n_all,n_in);
+W.o = randn(param.n_all,n_out)/sqrt(param.n_all);
+% Wfb = rand(N,1)*2-1;
+I_noise = randn(param.n_all,n_its)*I0;
+rate.train = nan(param.n_all,n_its);
+rate.test = nan(param.n_all,n_its);
+rate.init = nan(param.n_all,n_its);
+rate.all = nan(param.n_all,n_its);
+
+% n_plastic = round(.6*param.n_all);
+% i_plastic = sort(randperm(param.n_all,n_plastic));
+
+P.i_cell = cell(param.n_all,1);
+P.o_cell = cell(n_out,1);
+for ix = 1:param.n_all
+    P.i_cell{ix} = eye(param.n_all)/(param.n_all);
+end
+for ix = 1:n_out
+    P.o_cell{ix} = eye(param.n_all)/(param.n_all);
+end
+
+param.stim_dur = 50;
+param.out_dur = 50;
+param.train_window = 200;
+param.t_on = 200;
+param.t_off = t_on+stim_dur;
+param.t_end = t_off+train_W.indow;
+y = zeros(n_its,n_in);
+y(t_on:t_off,1) = 5;
+f = ones(n_its,n_in)*-.5;
+f(t_end-2*out_dur:t_end-out_dur,1) = 1;
+
+%% record innate target
+for t = 1:n_its
+    for ix = 1:param.n_all
+        dx(ix) = 1/tau*(-x(ix) + W.r(:,ix)'*r + W.i(ix,:)*y(t,:)');
+    end
+    x = x+dx;
+    r = tanh(x);
+    rate.all(:,t) = r;
+end
+
+%% pre train output
+for t = 1:n_its
+    for ix = 1:param.n_all
+        dx(ix) = 1/tau*(-x(ix) + W.r(:,ix)'*r + W.i(ix,:)*y(t,:)' + I_noise(ix));
+    end
+    x = x+dx;
+    r = tanh(x);
+    rate.init(:,t) = r;
+end
+
+figure('position',[1000 100 800 900]);
+subplot(3,1,1)
+imagesc(rate.all)
+xlabel('Time (ms)')
+ylabel('Cells')
+for sp = 1:3
+subplot(7,2,6+2*sp-1)
+hold on
+h1 = area([t_on t_end],[1 1]);
+h2 = area([t_on t_end],[-1 -1]);
+h1(:).FaceColor = [.7 .7 .7];
+h1(:).EdgeColor = 'none';
+h1(:).FaceAlpha = .5;
+h2(:).FaceColor = [.7 .7 .7];
+h2(:).EdgeColor = 'none';
+h2(:).FaceAlpha = .5;
+plot(rate.all(sp,:),'b')
+plot(rate.init(sp,:),'r')
+plot([t_on t_on],[-1 1],'-k')
+plot([t_off t_off],[-1 1],'-k')
+title(['Cell ' num2str(sp)])
+set(gca,'xtick',[],'ytick',[])
+ylabel('Event r')
+end
+
+subplot(7,2,13)
+hold on
+h1 = area([t_on t_end],[1 1]);
+h2 = area([t_on t_end],[-1 -1]);
+h1(:).FaceColor = [.7 .7 .7];
+h1(:).EdgeColor = 'none';
+h1(:).FaceAlpha = .5;
+h2(:).FaceColor = [.7 .7 .7];
+h2(:).EdgeColor = 'none';
+h2(:).FaceAlpha = .5;
+plot(f,'b')
+plot(W.o'*rate.init,'r')
+plot([t_on t_on],[-1 1],'-k')
+plot([t_off t_off],[-1 1],'-k')
+ylim([-1 1])
+title('Output')
+set(gca,'xtick',[],'ytick',[])
+ylabel('Event r')
+
+%% training
+for l = 1:n_train_its
+x = randn(param.n_all,1);
+r = tanh(x);
+for t = 1:t_end
+    rate.train(:,t) = r;
+    
+    %innate training
+    e.i(l,:,t) = rate.train(:,t) - rate.all(:,t);    
+    
+    for ix = 1:param.n_all
+        Pi = P.i_cell{ix};
+        P.i_cell{ix} = Pi - (Pi*r*r'*Pi)/(1+r'*Pi*r);
+        W.r(:,ix) = W.r(:,ix) - e.i(l,ix,t) * P.i_cell{ix}*r;
+        
+        dx(ix) = 1/tau*(-x(ix) + W.r(:,ix)'*r + W.i(ix,:)*y(t,:)' + I_noise(ix)); %+ Wfb(i)*z
+    end
+    x = x+dx;
+    r = tanh(x);   
+    
+    e.o(l,:,t) = W.o'*r - f(t);    
+    for ix = 1:n_out
+        Po = P.o_cell{ix};
+        P.o_cell{ix} = Po - (Po*r*r'*Po)/(1+r'*Po*r);
+        W.o(:,ix) = W.o(:,ix) - e.o(l,ix,t) * P.o_cell{ix}*r;
+    end
+end
+end
+
+%% post train output
+for t = 1:n_its
+    for ix = 1:n_all
+        dx(ix) = 1/tau*(-x(ix) + W.r(:,ix)'*r + W.i(ix,:)*y(t,:)' + I_noise(ix));
+    end
+    x = x+dx;
+    r = tanh(x);
+    rate.test(:,t) = r;
+end
+
+for sp = 1:3
+subplot(7,2,6+2*sp)
+hold on
+h1 = area([t_on t_end],[1 1]);
+h2 = area([t_on t_end],[-1 -1]);
+h1(:).FaceColor = [.7 .7 .7];
+h1(:).EdgeColor = 'none';
+h1(:).FaceAlpha = .5;
+h2(:).FaceColor = [.7 .7 .7];
+h2(:).EdgeColor = 'none';
+h2(:).FaceAlpha = .5;
+plot(rate.all(sp,:),'b')
+plot(rate.test(sp,:),'r')
+plot([t_on t_on],[-1 1],'-k')
+plot([t_off t_off],[-1 1],'-k')
+title(['Cell ' num2str(sp)])
+set(gca,'xtick',[],'ytick',[])
+ylabel('Event r')
+end
+
+subplot(7,2,14)
+hold on
+h1 = area([t_on t_end],[1 1]);
+h2 = area([t_on t_end],[-1 -1]);
+h1(:).FaceColor = [.7 .7 .7];
+h1(:).EdgeColor = 'none';
+h1(:).FaceAlpha = .5;
+h2(:).FaceColor = [.7 .7 .7];
+h2(:).EdgeColor = 'none';
+h2(:).FaceAlpha = .5;
+plot(f,'b')
+plot(W.o'*rate.test,'r')
+plot([t_on t_on],[-1 1],'-k')
+plot([t_off t_off],[-1 1],'-k')
+ylim([-1 1])
+title('Output')
+set(gca,'xtick',[],'ytick',[])
+ylabel('Event r')
