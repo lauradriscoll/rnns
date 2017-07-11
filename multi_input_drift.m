@@ -5,7 +5,7 @@ n_its = 1000;
 n_in = 3;
 pc = .1;
 I0 = .001;
-n_train_its = 30;
+n_train_its = 60;
 n_out = 1;
 x = randn(n_all,1);
 r = tanh(x);
@@ -22,13 +22,7 @@ r_init = cell(n_in,1);
 R_all = cell(n_in,1);
 n_plastic = round(.6*n_all);
 i_plastic = sort(randperm(n_all,n_plastic));
-Pi_cell = cell(n_all,n_in);
 Po_cell = cell(n_out,n_in);
-for n = 1:n_all
-    for ni = 1:n_in
-    Pi_cell{n,ni} = eye(n_all)/(n_all);
-    end
-end
 for n = 1:n_out
     for ni = 1:n_in
     Po_cell{n,ni} = eye(n_all)/(n_all);
@@ -42,16 +36,18 @@ t_on = 200;
 t_off = t_on+stim_dur;
 t_end = t_off+train_window;
 y = zeros(n_its,n_in);
-y(t_on:t_off,:) = 5;
+y(t_on:t_off,1) = 5;
+y(t_on:t_off,2) = -5;
+
 f = ones(n_its,2)*-.5;
 f(:,2) = f(:,2)+1;
 f([1:t_on t_end:end],:) = 0;
 
-tc = gauspuls('cutoff',100,.5,[],-40); 
-t = -tc : tc/(t_off-t_on) : tc; 
-yi = gauspuls(t,100,0.5); 
-f((t_end-size(yi,2)+1):t_end,1) = .5*(-yi)-.5;
-f((t_end-size(yi,2)+1):t_end,2) = .5*(yi)+.5;
+% tc = gauspuls('cutoff',100,.5,[],-40); 
+% t = -tc : tc/(t_off-t_on) : tc; 
+% yi = gauspuls(t,100,0.5); 
+% f((t_end-size(yi,2)+1):t_end,1) = .5*(-yi)-.5;
+% f((t_end-size(yi,2)+1):t_end,2) = .5*(yi)+.5;
 
 %% record innate target
 for in_idx_train = 1:2
@@ -69,10 +65,11 @@ end
 
 %% pre train output
 for in_idx_train = 1:2
+I_noise = randn(n_all,n_its)*I0;    
 r_init{in_idx_train} = nan(n_all,n_its);
 for t = 1:n_its
     for i = 1:n_all
-        dx(i) = 1/tau*(-x(i) + Wr(:,i)'*r + Wi(i,in_idx_train)*y(t,in_idx_train)' + I_noise(i));
+        dx(i) = 1/tau*(-x(i) + Wr(:,i)'*r + Wi(i,in_idx_train)*y(t,in_idx_train)' + I_noise(i,t));
     end
     x = x+dx;
     r = tanh(x);
@@ -95,11 +92,13 @@ xlabel('Time (ms)')
 ylabel('Cells')
 title('Trial Type 2')
 size_P = nan(n_train_its,t_end,n_all);
+
 for l = 1:n_train_its
 I_noise = randn(n_all,n_its)*I0;    
 r_train{in_idx_train} = nan(n_all,n_its);
 x = randn(n_all,1);
 r = tanh(x);
+Wr = Wr + randn(n_all)*I0;
 
 for t = t_on:t_end
     r_train{in_idx_train}(:,t) = r;
@@ -107,12 +106,7 @@ for t = t_on:t_end
     %innate training
     ei(l,in_idx_train,:,t) = r_train{in_idx_train}(:,t) - R_all{in_idx_train}(:,t);    
     
-    for i = 1:n_all
-        P = Pi_cell{i,in_idx_train};
-        Pi_cell{i,in_idx_train} = P - (P*r*r'*P)/(1+r'*P*r);
-        size_P(l,t,i) = nanmean(abs(P(:)));
-        Wr(:,i) = Wr(:,i) - ei(l,in_idx_train,i,t) * Pi_cell{i,in_idx_train}*r;
-        
+    for i = 1:n_all        
         dx(i) = 1/tau*(-x(i) + Wr(:,i)'*r + Wi(i,in_idx_train)*y(t,in_idx_train)' + I_noise(i,t)); %+ Wfb(i)*z
     end
     x = x+dx;
@@ -130,10 +124,11 @@ end
 
 %% post train output
 for in_idx = 1:2
+I_noise = randn(n_all,n_its)*I0;    
 r_test{in_idx} = nan(n_all,n_its);
 for t = 1:n_its
     for i = 1:n_all
-        dx(i) = 1/tau*(-x(i) + Wr(:,i)'*r + Wi(i,in_idx)*y(t,in_idx)' + I_noise(i));
+        dx(i) = 1/tau*(-x(i) + Wr(:,i)'*r + Wi(i,in_idx)*y(t,in_idx)' + I_noise(i,t));
     end
     x = x+dx;
     r = tanh(x);
@@ -144,7 +139,7 @@ end
 
 for in_idx = 1:2
 for sp = 1:3
-subplot(7,2,6+2*sp-in_idx+1)
+subplot(7,2,6+2*sp+in_idx-2)
 hold on
 h1 = area([t_on t_end],[1 1]);
 h2 = area([t_on t_end],[-1 -1]);
@@ -163,7 +158,7 @@ set(gca,'xtick',[],'ytick',[])
 ylabel('Event Rate')
 end
 
-subplot(7,2,15-in_idx)
+subplot(7,2,12+in_idx)
 hold on
 h1 = area([t_on t_end],[1 1]);
 h2 = area([t_on t_end],[-1 -1]);
@@ -174,7 +169,7 @@ h2(:).FaceColor = [.7 .7 .7];
 h2(:).EdgeColor = 'none';
 h2(:).FaceAlpha = .5;
 plot(f(:,in_idx),'b')
-plot(Wo'*r_test{in_idx_train},'r')
+plot(Wo'*r_test{in_idx},'r')
 plot([t_on t_on],[-1 1],'-k')
 plot([t_off t_off],[-1 1],'-k')
 ylim([-1 1])

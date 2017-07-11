@@ -16,7 +16,6 @@ Wr = randn(n_all)/sqrt(pc*n_all);
 Wi = randn(n_all,n_in);
 Wo = randn(n_all,n_out)/sqrt(n_all);
 % Wfb = rand(N,1)*2-1;
-I_noise = randn(n_all,n_its)*I0;
 r_train = cell(n_in,1);
 r_test = cell(n_in,1);
 r_init = cell(n_in,1);
@@ -43,16 +42,17 @@ t_on = 200;
 t_off = t_on+stim_dur;
 t_end = t_off+train_window;
 y = zeros(n_its,n_in);
-y(t_on:t_off,:) = 5;
+y(t_on:t_off,1) = 5;
+y(t_on:t_off,2) = -5;
 f = ones(n_its,2)*-.5;
 f(:,2) = f(:,2)+1;
 f([1:t_on t_end:end],:) = 0;
 
-tc = gauspuls('cutoff',100,.5,[],-40); 
-t = -tc : tc/(t_off-t_on) : tc; 
-yi = gauspuls(t,100,0.5); 
-f((t_end-size(yi,2)+1):t_end,1) = .5*(-yi)-.5;
-f((t_end-size(yi,2)+1):t_end,2) = .5*(yi)+.5;
+% tc = gauspuls('cutoff',100,.5,[],-40); 
+% t = -tc : tc/(t_off-t_on) : tc; 
+% yi = gauspuls(t,100,0.5); 
+% f((t_end-size(yi,2)+1):t_end,1) = .5*(-yi)-.5;
+% f((t_end-size(yi,2)+1):t_end,2) = .5*(yi)+.5;
 
 %% record innate target
 for in_idx_train = 1:2
@@ -69,11 +69,12 @@ end
 end
 
 %% pre train output
+I_noise = randn(n_all,n_its)*I0;
 for in_idx_train = 1:2
 r_init{in_idx_train} = nan(n_all,n_its);
 for t = 1:n_its
     for i = 1:n_all
-        dx(i) = 1/tau*(-x(i) + Wr(:,i)'*r + Wi(i,in_idx_train)*y(t,in_idx_train)' + I_noise(i));
+        dx(i) = 1/tau*(-x(i) + Wr(:,i)'*r + Wi(i,in_idx_train)*y(t,in_idx_train)' + I_noise(i,t));
     end
     x = x+dx;
     r = tanh(x);
@@ -96,6 +97,7 @@ xlabel('Time (ms)')
 ylabel('Cells')
 title('Trial Type 2')
 for l = 1:n_train_its
+I_noise = randn(n_all,n_its)*I0;
     
 r_train{in_idx_train} = nan(n_all,n_its);
 x = randn(n_all,1);
@@ -112,7 +114,7 @@ for t = t_on:t_end
         Pi_cell{i,in_idx_train} = P - (P*r*r'*P)/(1+r'*P*r);
         Wr(:,i) = Wr(:,i) - ei(l,in_idx_train,i,t) * Pi_cell{i,in_idx_train}*r;
         
-        dx(i) = 1/tau*(-x(i) + Wr(:,i)'*r + Wi(i,in_idx_train)*y(t,in_idx_train)' + I_noise(i)); %+ Wfb(i)*z
+        dx(i) = 1/tau*(-x(i) + Wr(:,i)'*r + Wi(i,in_idx_train)*y(t,in_idx_train)' + I_noise(i,t)); %+ Wfb(i)*z
     end
     x = x+dx;
     r = tanh(x);   
@@ -128,11 +130,12 @@ end
 
 
 %% post train output
+I_noise = randn(n_all,n_its)*I0;
 for in_idx = 1:2
 r_test{in_idx} = nan(n_all,n_its);
 for t = 1:n_its
     for i = 1:n_all
-        dx(i) = 1/tau*(-x(i) + Wr(:,i)'*r + Wi(i,in_idx)*y(t,in_idx)' + I_noise(i));
+        dx(i) = 1/tau*(-x(i) + Wr(:,i)'*r + Wi(i,in_idx)*y(t,in_idx)' + I_noise(i,t));
     end
     x = x+dx;
     r = tanh(x);
@@ -143,7 +146,7 @@ end
 
 for in_idx = 1:2
 for sp = 1:3
-subplot(7,2,6+2*sp-in_idx+1)
+subplot(7,2,6+2*sp+in_idx-2)
 hold on
 h1 = area([t_on t_end],[1 1]);
 h2 = area([t_on t_end],[-1 -1]);
@@ -162,7 +165,7 @@ set(gca,'xtick',[],'ytick',[])
 ylabel('Event Rate')
 end
 
-subplot(7,2,15-in_idx)
+subplot(7,2,12+in_idx)
 hold on
 h1 = area([t_on t_end],[1 1]);
 h2 = area([t_on t_end],[-1 -1]);
@@ -173,7 +176,7 @@ h2(:).FaceColor = [.7 .7 .7];
 h2(:).EdgeColor = 'none';
 h2(:).FaceAlpha = .5;
 plot(f(:,in_idx),'b')
-plot(Wo'*r_test{in_idx_train},'r')
+plot(Wo'*r_test{in_idx},'r')
 plot([t_on t_on],[-1 1],'-k')
 plot([t_off t_off],[-1 1],'-k')
 ylim([-1 1])
